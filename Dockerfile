@@ -37,30 +37,15 @@ RUN composer global update
 RUN ln -s /root/.composer/vendor/bin/drush /usr/local/bin/drush
 
 # Setup PHP.
+## Display Errors
 RUN sed -i 's/display_errors = Off/display_errors = On/' /etc/php5/apache2/php.ini
 RUN sed -i 's/display_errors = Off/display_errors = On/' /etc/php5/cli/php.ini
-
-# Setup Blackfire.
-# Get the sources and install the Debian packages.
-# We create our own start script. If the environment variables are set, we
-# simply start Blackfire in the foreground. If not, we create a dummy daemon
-# script that simply loops indefinitely. This is to trick Supervisor into
-# thinking the program is running and avoid unnecessary error messages.
-RUN wget -O - https://packagecloud.io/gpg.key | apt-key add -
-RUN echo "deb http://packages.blackfire.io/debian any main" > /etc/apt/sources.list.d/blackfire.list
-RUN apt-get update
-RUN apt-get install -y blackfire-agent blackfire-php
-RUN echo -e '#!/bin/bash\n\
-if [[ -z "$BLACKFIREIO_SERVER_ID" || -z "$BLACKFIREIO_SERVER_TOKEN" ]]; then\n\
-    while true; do\n\
-        sleep 1000\n\
-    done\n\
-else\n\
-    /usr/bin/blackfire-agent -server-id="$BLACKFIREIO_SERVER_ID" -server-token="$BLACKFIREIO_SERVER_TOKEN"\n\
-fi\n\
-' > /usr/local/bin/launch-blackfire
-RUN chmod +x /usr/local/bin/launch-blackfire
-RUN mkdir -p /var/run/blackfire
+## POST max size
+RUN sed -i '/post_max_size/s/.*/post_max_size = 100M/' /etc/php5/apache2/php.ini
+RUN sed -i '/post_max_size/s/.*/post_max_size = 100M/' /etc/php5/cli/php.ini
+## upload max filesize
+RUN sed -i '/upload_max_filesize/s/.*/upload_max_filesize = 100M/' /etc/php5/apache2/php.ini
+RUN sed -i '/upload_max_filesize/s/.*/upload_max_filesize = 100M/' /etc/php5/cli/php.ini
 
 # Setup Apache.
 # In order to run our Simpletest tests, we need to make Apache
@@ -96,7 +81,6 @@ RUN sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so
 RUN echo -e '[program:apache2]\ncommand=/bin/bash -c "source /etc/apache2/envvars && exec /usr/sbin/apache2 -DFOREGROUND"\nautorestart=true\n\n' >> /etc/supervisor/supervisord.conf
 RUN echo -e '[program:mysql]\ncommand=/usr/bin/pidproxy /var/run/mysqld/mysqld.pid /usr/sbin/mysqld\nautorestart=true\n\n' >> /etc/supervisor/supervisord.conf
 RUN echo -e '[program:sshd]\ncommand=/usr/sbin/sshd -D\n\n' >> /etc/supervisor/supervisord.conf
-RUN echo -e '[program:blackfire]\ncommand=/usr/local/bin/launch-blackfire\n\n' >> /etc/supervisor/supervisord.conf
 RUN echo -e '[program:cron]\ncommand=cron -f\nautorestart=false \n\n' >> /etc/supervisor/supervisord.conf
 
 # Setup XDebug.
@@ -120,6 +104,22 @@ RUN /etc/init.d/mysql start && \
 	drush si -y minimal --db-url=mysql://root:@localhost/drupal --account-pass=admin && \
 	drush dl admin_menu devel && \
 	drush en -y admin_menu simpletest devel && \
+	drush en -y ctools && \
+	drush en -y views && \
+	drush en -y pathauto && \
+	drush en -y token && \
+	drush en -y media && \
+	drush en -y file_entity && \
+	drush en -y entity && \
+	drush dis -y toolbar && \
+	drush en -y adminimal_admin_menu && \
+	drush en -y module_filter && \
+	drush en -y rules && \
+	drush en -y backup_migrate && \
+	drush en -y jquery_update && \
+	drush en -y ckeditor && \
+	drush en -y link && \
+	drush en -y ds && \
 	drush vset "admin_menu_tweak_modules" 1 && \
 	drush vset "admin_theme" "seven" && \
 	drush vset "node_admin_theme" 1
